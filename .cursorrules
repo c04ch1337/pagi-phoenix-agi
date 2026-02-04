@@ -2,7 +2,7 @@
 
 - **Context Awareness:** You are part of a polyglot microservices system (Rust/Python). Always check the 'pagi-proto/pagi.proto' files before changing service interfaces. Enforce gRPC as the sole inter-service communication protocol.
 
-- **Memory Protocol:** When asked to remember a pattern, suggest how to store it in the 7-layer memory hierarchy (e.g., "Should I add this to the L5 Procedural Skill registry?"). Route all memory operations through the Rust MemoryManager—no direct disk access from Python.
+- **Memory Protocol:** When asked to remember a pattern, suggest how to store it in the 7-layer memory hierarchy (e.g., "Should I add this to the L5 Procedural Skill registry?"). Route all memory operations through the Rust MemoryManager—no direct disk access from Python. Reject code that bypasses gRPC (e.g., direct Python I/O for memory or registry); route through Rust MemoryManager.
 
 - **Recursive Reasoning:** If I ask you to analyze a large file, do not read it all. Write a Python 'peek' script to analyze the structure first, following MIT RLM research principles. Limit recursion depth to 5 levels; use circuit breakers in delegate() calls.
 

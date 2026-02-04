@@ -14,10 +14,19 @@ pub struct SafetyGovernor {
 
 impl SafetyGovernor {
     pub fn new() -> Self {
-        Self {
-            max_depth: 5,
-            hitl_gate: true,
-        }
+        let max_depth = std::env::var("PAGI_MAX_RECURSION_DEPTH")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+        let hitl_gate = std::env::var("PAGI_HITL_GATE")
+            .ok()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "true" | "1" | "yes" => Some(true),
+                "false" | "0" | "no" => Some(false),
+                _ => s.parse().ok(),
+            })
+            .unwrap_or(true);
+        Self { max_depth, hitl_gate }
     }
 
     /// Middleware: Enforce recursion limit and basic sanitization.

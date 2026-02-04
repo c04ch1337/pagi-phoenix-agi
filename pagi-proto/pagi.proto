@@ -5,8 +5,17 @@ package pagi;
 service Pagi {
   rpc AccessMemory(MemoryRequest) returns (MemoryResponse);
   rpc DelegateRLM(RLMRequest) returns (RLMResponse);
+  // Unified action execution schema (Phase 3): enables mockable observability without schema drift.
+  rpc ExecuteAction(ActionRequest) returns (ActionResponse);
   rpc SelfHeal(HealRequest) returns (HealResponse);
+  rpc SemanticSearch(SearchRequest) returns (SearchResponse);
+  rpc ProposePatch(PatchRequest) returns (PatchResponse);
+  rpc ApplyPatch(ApplyRequest) returns (ApplyResponse);
+  rpc UpsertVectors(UpsertRequest) returns (UpsertResponse);
+  rpc SimulateError(Empty) returns (Empty);
 }
+
+message Empty {}
 
 message MemoryRequest {
   int32 layer = 1;  // 1-7
@@ -30,6 +39,22 @@ message RLMResponse {
   bool converged = 2;
 }
 
+// Action schema: stable interface between Python loop planning and Rust-governed execution.
+// Keep params stringly-typed to minimize churn while the skill registry evolves.
+message ActionRequest {
+  string skill_name = 1;            // e.g., "peek_file", "save_skill"
+  map<string, string> params = 2;   // e.g., {"path": "README.md", "reasoning_id": "uuid"}
+  int32 depth = 3;                  // Recursion level for governance / traceability
+  string reasoning_id = 4;          // Trace id spanning loop steps
+  bool mock_mode = 5;               // If true, return dummy observation (no side effects)
+}
+
+message ActionResponse {
+  string observation = 1;           // Human-readable result to feed back into loop context
+  bool success = 2;
+  string error = 3;                 // Non-empty on failure
+}
+
 message HealRequest {
   string error_trace = 1;
 }
@@ -37,4 +62,60 @@ message HealRequest {
 message HealResponse {
   string proposed_patch = 1;
   bool auto_apply = 2;  // False if Rust core involved
+}
+
+message SearchRequest {
+  string query = 1;              // Human-readable query (for logging / future server-side embed)
+  string kb_name = 2;            // e.g., "kb_core" for one of 8 KBs
+  uint32 limit = 3;              // Max results
+  repeated float query_vector = 4;  // Optional: client-provided embedding (Python embed → Rust search)
+}
+
+message SearchResponse {
+  repeated SearchHit hits = 1;
+}
+
+message SearchHit {
+  string document_id = 1;
+  float score = 2;
+  string content_snippet = 3;
+}
+
+message PatchRequest {
+  string error_trace = 1;
+  string component = 2;   // "rust_core" or "python_skill"
+}
+
+message PatchResponse {
+  string patch_id = 1;
+  string proposed_code = 2;
+  bool requires_hitl = 3;
+}
+
+message ApplyRequest {
+  string patch_id = 1;
+  bool approved = 2;     // HITL flag
+  string component = 3;  // "rust_core" or "python_skill"
+  bool requires_hitl = 4;
+}
+
+message ApplyResponse {
+  bool success = 1;
+  string commit_hash = 2;
+}
+
+message UpsertRequest {
+  string kb_name = 1;
+  repeated VectorPoint points = 2;
+}
+
+message VectorPoint {
+  string id = 1;
+  repeated float vector = 2;
+  map<string, string> payload = 3;
+}
+
+message UpsertResponse {
+  bool success = 1;
+  uint32 upserted_count = 2;
 }

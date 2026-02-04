@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Env (secrets; copy .env.example to .env)
+.env

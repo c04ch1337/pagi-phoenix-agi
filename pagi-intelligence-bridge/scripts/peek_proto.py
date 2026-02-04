@@ -26,13 +26,19 @@ def main() -> None:
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # grpc_tools.protoc expects argv-style params (argv[0] is program name).
+    # IMPORTANT: pass the .proto path relative to the provided -I/--proto_path to avoid
+    # "File does not reside within any path specified using --proto_path" on Windows.
     args = [
+        "protoc",
         f"-I{proto_dir}",
         f"--python_out={out_dir}",
         f"--grpc_python_out={out_dir}",
-        str(proto_file),
+        proto_file.name,
     ]
-    protoc.main(args)
+    code = protoc.main(args)
+    if code != 0:
+        raise RuntimeError(f"protoc failed with exit code {code}")
 
     # Peek: list generated modules and key types
     pb2_file = out_dir / "pagi_pb2.py"
