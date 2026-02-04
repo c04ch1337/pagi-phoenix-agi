@@ -13,7 +13,7 @@ use qdrant_client::qdrant::{
 use tonic::Status;
 
 use crate::proto::pagi_proto::{
-    SearchHit, SearchRequest, SearchResponse, UpsertRequest, UpsertResponse, VectorPoint,
+    SearchHit, SearchRequest, SearchResponse, UpsertRequest, UpsertResponse,
 };
 
 /// Tiered memory manager; layers 1–7 per blueprint.
@@ -24,11 +24,25 @@ pub struct MemoryManager {
     l2_working: DashMap<String, String>,
     /// L4 semantic: local Qdrant client (1536-dim cap).
     l4_semantic: Option<QdrantClient>,
+    /// Cached embedding dim to avoid env parsing on hot paths.
+    embedding_dim: usize,
+    /// Cached zero vector for fallback queries.
+    zero_vector: Vec<f32>,
 }
 
 impl MemoryManager {
+    fn embedding_dim_from_env() -> usize {
+        std::env::var("PAGI_EMBEDDING_DIM")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1536)
+    }
+
     /// Create and connect to Qdrant at URI from PAGI_QDRANT_URI. Use init_kbs() after to create collections.
     pub async fn new_async() -> Result<Arc<Self>, Box<dyn std::error::Error + Send + Sync>> {
+        let embedding_dim = Self::embedding_dim_from_env();
+        let zero_vector = vec![0f32; embedding_dim];
+
         // Allow running orchestrator without Qdrant for Phase-3 loop/action testing.
         // This keeps polyglot wiring verifiable even when L4 infra is absent.
         if std::env::var("PAGI_DISABLE_QDRANT")
@@ -40,6 +54,8 @@ impl MemoryManager {
                 l1_sensory: DashMap::new(),
                 l2_working: DashMap::new(),
                 l4_semantic: None,
+                embedding_dim,
+                zero_vector,
             }));
         }
 
@@ -55,6 +71,8 @@ impl MemoryManager {
             l1_sensory: DashMap::new(),
             l2_working: DashMap::new(),
             l4_semantic: Some(l4_semantic),
+            embedding_dim,
+            zero_vector,
         }))
     }
 
@@ -64,10 +82,7 @@ impl MemoryManager {
             // Qdrant disabled; L4 init is a no-op.
             return Ok(());
         };
-        let dim = std::env::var("PAGI_EMBEDDING_DIM")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1536);
+        let dim = self.embedding_dim as u64;
         let kb_names = [
             "kb_core",
             "kb_skills",
@@ -136,23 +151,20 @@ impl MemoryManager {
     }
 
     /// L4 semantic search. Uses query_vector when provided (Python embed); else zero vector (stub).
+    /// When Qdrant is disabled, returns empty hits so callers (e.g. propose_patch) can still run.
     pub async fn semantic_search(
         &self,
         req: SearchRequest,
     ) -> Result<SearchResponse, Status> {
-        let l4 = self
-            .l4_semantic
-            .as_ref()
-            .ok_or_else(|| Status::failed_precondition("Qdrant disabled (PAGI_DISABLE_QDRANT=true)"))?;
+        let Some(l4) = self.l4_semantic.as_ref() else {
+            return Ok(SearchResponse { hits: vec![] });
+        };
         let limit = req.limit.max(1).min(100) as u64;
-        let dim = std::env::var("PAGI_EMBEDDING_DIM")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1536);
-        let query_vector: Vec<f32> = if !req.query_vector.is_empty() && req.query_vector.len() == dim as usize {
-            req.query_vector.clone()
+        let dim = self.embedding_dim;
+        let query_vector: Vec<f32> = if req.query_vector.len() == dim {
+            req.query_vector
         } else {
-            (0..dim).map(|_| 0f32).collect()
+            self.zero_vector.clone()
         };
 
         let search_req = SearchPoints {
@@ -214,17 +226,15 @@ impl MemoryManager {
             .l4_semantic
             .as_ref()
             .ok_or_else(|| Status::failed_precondition("Qdrant disabled (PAGI_DISABLE_QDRANT=true)"))?;
-        let points: Vec<PointStruct> = req
-            .points
-            .into_iter()
-            .map(|p: VectorPoint| {
-                let mut payload = Payload::new();
-                for (k, v) in p.payload {
-                    payload.insert(k, v);
-                }
-                PointStruct::new(PointId::from(p.id), p.vector, payload)
-            })
-            .collect();
+
+        let mut points: Vec<PointStruct> = Vec::with_capacity(req.points.len());
+        for p in req.points {
+            let mut payload = Payload::new();
+            for (k, v) in p.payload {
+                payload.insert(k, v);
+            }
+            points.push(PointStruct::new(PointId::from(p.id), p.vector, payload));
+        }
         let n = points.len();
         l4
             .upsert_points_blocking(&req.kb_name, points)

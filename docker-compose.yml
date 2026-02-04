@@ -1,0 +1,51 @@
+# Optional deployment only. Primary target is Bare Metal (run orchestrator + bridge natively).
+# See docs/Backend-Integration-Guide.md §5.
+#
+# Usage:
+#   docker compose up -d
+#   docker compose up -d qdrant   # L4 only
+#   docker compose --profile full up -d  # orchestrator + bridge + qdrant (when images exist)
+#
+# For local dev, prefer: make build && make run (orchestrator) and poetry run uvicorn (bridge).
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional: uncomment when Rust/Python images are built (e.g. Dockerfile in each component).
+  # orchestrator:
+  #   build: ./pagi-core-orchestrator
+  #   ports:
+  #     - "50051:50051"
+  #   environment:
+  #     PAGI_GRPC_PORT: "50051"
+  #     PAGI_QDRANT_URI: http://qdrant:6334
+  #     PAGI_DISABLE_QDRANT: "false"
+  #   depends_on:
+  #     qdrant:
+  #       condition: service_healthy
+  #
+  # bridge:
+  #   build: ./pagi-intelligence-bridge
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     PAGI_HTTP_PORT: "8000"
+  #     PAGI_GRPC_ORCHESTRATOR: orchestrator:50051
+  #   depends_on:
+  #     - orchestrator
+
+volumes:
+  qdrant_storage: {}

@@ -1,0 +1,9 @@
+{
+  "name": "pagi-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Frontend stub — paste Google AI Studio UI here and connect to Pagi APIs",
+  "scripts": {
+    "start": "node -e \"console.log('Paste your frontend in src/ and set scripts.start in package.json; then run npm start'); process.exit(0)\""
+  }
+}

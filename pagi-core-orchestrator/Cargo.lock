@@ -2243,6 +2243,8 @@ dependencies = [
  "prost 0.11.9",
  "pyo3",
  "qdrant-client",
+ "serde_json",
+ "sha2",
  "surrealdb",
  "tokio",
  "tokio-stream",

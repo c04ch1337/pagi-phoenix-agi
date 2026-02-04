@@ -74,6 +74,11 @@ class PagiStub(object):
                 request_serializer=pagi__pb2.UpsertRequest.SerializeToString,
                 response_deserializer=pagi__pb2.UpsertResponse.FromString,
                 _registered_method=True)
+        self.SimulateError = channel.unary_unary(
+                '/pagi.Pagi/SimulateError',
+                request_serializer=pagi__pb2.Empty.SerializeToString,
+                response_deserializer=pagi__pb2.Empty.FromString,
+                _registered_method=True)
 
 
 class PagiServicer(object):
@@ -128,6 +133,12 @@ class PagiServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SimulateError(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_PagiServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -170,6 +181,11 @@ def add_PagiServicer_to_server(servicer, server):
                     servicer.UpsertVectors,
                     request_deserializer=pagi__pb2.UpsertRequest.FromString,
                     response_serializer=pagi__pb2.UpsertResponse.SerializeToString,
+            ),
+            'SimulateError': grpc.unary_unary_rpc_method_handler(
+                    servicer.SimulateError,
+                    request_deserializer=pagi__pb2.Empty.FromString,
+                    response_serializer=pagi__pb2.Empty.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -388,6 +404,33 @@ class Pagi(object):
             '/pagi.Pagi/UpsertVectors',
             pagi__pb2.UpsertRequest.SerializeToString,
             pagi__pb2.UpsertResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SimulateError(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/pagi.Pagi/SimulateError',
+            pagi__pb2.Empty.SerializeToString,
+            pagi__pb2.Empty.FromString,
             options,
             channel_credentials,
             insecure,

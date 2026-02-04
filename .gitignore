@@ -4,8 +4,10 @@
 
 # Python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
+*.pyc
 .pytest_cache/
 *.egg-info/
 dist/
@@ -13,6 +15,10 @@ build/
 # Generated proto stubs (optional; regenerate via scripts/peek_proto.py)
 # pagi-intelligence-bridge/src/pagi_pb/*_pb2.py
 # pagi-intelligence-bridge/src/pagi_pb/*_pb2_grpc.py
+
+# Template / outputs
+patches/
+codegen_output/
 
 # IDE / OS
 .idea/

@@ -47,6 +47,8 @@ message ActionRequest {
   int32 depth = 3;                  // Recursion level for governance / traceability
   string reasoning_id = 4;          // Trace id spanning loop steps
   bool mock_mode = 5;               // If true, return dummy observation (no side effects)
+  string allow_list_hash = 6;       // SHA256 of sorted allow-list for consistency check (optional)
+  uint32 timeout_ms = 7;            // Subprocess timeout; default 5000
 }
 
 message ActionResponse {

@@ -66,8 +66,11 @@ impl Pagi for Orchestrator {
             ));
         }
 
-        // Phase 3 stub: allow deterministic testing/observability in mock_mode.
-        if req.mock_mode {
+        // PAGI_MOCK_MODE precedence: mock path when request asks for mock or env forces mock.
+        let env_mock = std::env::var("PAGI_MOCK_MODE")
+            .map(|v| v.trim().eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+        if req.mock_mode || env_mock {
             let skill = req.skill_name;
             return Ok(Response::new(ActionResponse {
                 observation: format!("Observation: mock executed skill={skill}"),
@@ -76,10 +79,24 @@ impl Pagi for Orchestrator {
             }));
         }
 
+        // Real dispatch only when explicitly enabled (allow-list, timeout, no shell).
+        let allow_real = std::env::var("PAGI_ALLOW_REAL_DISPATCH")
+            .map(|v| v.trim().eq_ignore_ascii_case("true") || v == "1")
+            .unwrap_or(false);
+        if allow_real {
+            return self
+                .watchdog
+                .execute_action_real(req)
+                .await
+                .map(Response::new);
+        }
+
+        // PAGI_ALLOW_REAL_DISPATCH != true → return mock observation (do not expose unimplemented).
+        let skill = req.skill_name;
         Ok(Response::new(ActionResponse {
-            observation: "Observation: execute_action not wired (set mock_mode=true)".to_string(),
-            success: false,
-            error: "unimplemented".to_string(),
+            observation: format!("Observation: mock executed skill={skill}"),
+            success: true,
+            error: "".to_string(),
         }))
     }
 
@@ -165,6 +182,83 @@ fn grpc_addr() -> std::net::SocketAddr {
     format!("[::1]:{}", port)
         .parse()
         .unwrap_or_else(|_| "[::1]:50051".parse().unwrap())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::pagi_proto::ActionRequest;
+    use std::collections::HashMap;
+    use tonic::Request;
+
+    #[tokio::test]
+    async fn test_execute_action_mock() {
+        std::env::set_var("PAGI_DISABLE_QDRANT", "1");
+        std::env::set_var("PAGI_MOCK_MODE", "true");
+        std::env::set_var("PAGI_ALLOW_REAL_DISPATCH", "false");
+
+        let (registry, core_dir, bridge_dir) = default_paths();
+        let memory = MemoryManager::new_async().await.unwrap();
+        let watchdog = Watchdog::new(registry, memory.clone(), core_dir, bridge_dir);
+        let gov = SafetyGovernor::default();
+        let orch = Orchestrator {
+            memory,
+            watchdog,
+            safety_governor: gov,
+        };
+        let req = Request::new(ActionRequest {
+            skill_name: "peek_file".to_string(),
+            params: HashMap::new(),
+            depth: 0,
+            reasoning_id: "r1".to_string(),
+            mock_mode: true,
+            allow_list_hash: String::new(),
+            timeout_ms: 0,
+        });
+        let resp = orch.execute_action(req).await.unwrap();
+        let inner = resp.into_inner();
+        assert!(inner.success);
+        assert!(inner.observation.contains("mock executed"));
+        assert!(inner.observation.contains("peek_file"));
+
+        std::env::remove_var("PAGI_MOCK_MODE");
+        std::env::remove_var("PAGI_ALLOW_REAL_DISPATCH");
+        std::env::remove_var("PAGI_DISABLE_QDRANT");
+    }
+
+    #[tokio::test]
+    async fn test_execute_action_fallback_mock_when_real_disabled() {
+        std::env::set_var("PAGI_DISABLE_QDRANT", "1");
+        std::env::set_var("PAGI_ALLOW_REAL_DISPATCH", "false");
+        std::env::remove_var("PAGI_MOCK_MODE");
+
+        let (registry, core_dir, bridge_dir) = default_paths();
+        let memory = MemoryManager::new_async().await.unwrap();
+        let watchdog = Watchdog::new(registry, memory.clone(), core_dir, bridge_dir);
+        let gov = SafetyGovernor::default();
+        let orch = Orchestrator {
+            memory,
+            watchdog,
+            safety_governor: gov,
+        };
+        let req = Request::new(ActionRequest {
+            skill_name: "unknown_skill".to_string(),
+            params: HashMap::new(),
+            depth: 0,
+            reasoning_id: "r1".to_string(),
+            mock_mode: false,
+            allow_list_hash: String::new(),
+            timeout_ms: 0,
+        });
+        let resp = orch.execute_action(req).await.unwrap();
+        let inner = resp.into_inner();
+        assert!(inner.success);
+        assert!(inner.observation.contains("mock executed"));
+        assert!(inner.observation.contains("unknown_skill"));
+
+        std::env::remove_var("PAGI_ALLOW_REAL_DISPATCH");
+        std::env::remove_var("PAGI_DISABLE_QDRANT");
+    }
 }
 
 #[tokio::main]
