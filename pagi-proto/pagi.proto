@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package pagi;
+
+service Pagi {
+  rpc AccessMemory(MemoryRequest) returns (MemoryResponse);
+  rpc DelegateRLM(RLMRequest) returns (RLMResponse);
+  rpc SelfHeal(HealRequest) returns (HealResponse);
+}
+
+message MemoryRequest {
+  int32 layer = 1;  // 1-7
+  string key = 2;
+  string value = 3;  // For writes
+}
+
+message MemoryResponse {
+  string data = 1;
+  bool success = 2;
+}
+
+message RLMRequest {
+  string sub_query = 1;
+  string sub_context = 2;
+  int32 depth = 3;  // Recursion level
+}
+
+message RLMResponse {
+  string summary = 1;
+  bool converged = 2;
+}
+
+message HealRequest {
+  string error_trace = 1;
+}
+
+message HealResponse {
+  string proposed_patch = 1;
+  bool auto_apply = 2;  // False if Rust core involved
+}

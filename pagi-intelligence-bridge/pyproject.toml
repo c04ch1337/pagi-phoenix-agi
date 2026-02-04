@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pagi-intelligence-bridge"
+version = "0.1.0"
+description = "Python RLM Intelligence for Phoenix AGI"
+authors = ["Sovereign Architect"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.95"
+uvicorn = "^0.21"
+litellm = "^0.1"
+pydantic = "^2.0"
+sentence-transformers = "^2.2"
+grpcio = "^1.60"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.2"
+grpcio-tools = "^1.60"
